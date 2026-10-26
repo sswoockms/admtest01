@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loading...</title>
+  <!-- 도트 한글 폰트 (갈무리) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 바탕화면 -->
+  <div id="desktop">
+    <div id="icon-area"></div>
+    <div id="window-layer"></div>
+  </div>
+
+  <!-- 시작 메뉴 -->
+  <div id="start-menu" class="bevel-out hidden">
+    <div class="start-banner"><span id="start-banner-text"></span></div>
+    <ul id="start-list"></ul>
+  </div>
+
+  <!-- 작업 표시줄 -->
+  <div id="taskbar">
+    <button id="start-btn" class="bevel-out">
+      <span class="start-logo"></span>
+      <span id="start-label"></span>
+    </button>
+    <div id="task-buttons"></div>
+    <div id="tray"><button id="mute-btn" aria-label="소리 켜기/끄기"></button><span id="clock"></span></div>
+  </div>
+
+  <!-- 로딩 화면 -->
+  <div id="boot" class="hidden">
+    <div class="boot-inner">
+      <img id="boot-logo" alt="">
+      <div id="boot-title"></div>
+      <div id="boot-sub"></div>
+      <div class="boot-bar"><div id="boot-fill"></div></div>
+      <div id="boot-msg"></div>
+      <div id="boot-click"></div>
+    </div>
+  </div>
+
+  <!-- characters.js / data.js 에 실수가 있을 때 몇 번째 줄인지 기억해두는 코드 -->
+  <script>
+    window.__dataErrors = [];
+    window.addEventListener("error", function (e) {
+      window.__dataErrors.push({ msg: e.message || "", file: e.filename || "", line: e.lineno || 0, col: e.colno || 0 });
+    });
+  </script>
+
+  <!-- 순서 중요: characters.js → data.js → firebase-config.js → site-sync.js → script.js -->
+  <script src="characters.js"></script>
+  <script src="data.js"></script>
+  <script src="firebase-config.js"></script>
+  <!-- 편집기(#admin)에서 저장한 설정 적용 + 설치 화면(#setup) 연결 -->
+  <script src="site-sync.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
