@@ -72,10 +72,10 @@
     if (v && typeof v === 'object') { var o = {}; Object.keys(v).forEach(function (k) { o[k] = blank(v[k]); }); return o; }
     if (typeof v === 'number') return 0; if (typeof v === 'boolean') return false; return '';
   }
-  function toast(msg, bad) {
+  function toast(msg, bad, ms) {
     var t = $('#oca-toast'); if (!t) return;
     t.textContent = msg; t.className = 'oca-toast is-on' + (bad ? ' is-bad' : '');
-    clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'oca-toast'; }, 3400);
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = 'oca-toast'; }, ms || 3400);
   }
   function emails() {
     return (FBO.adminEmails || []).map(function (x) { return String(x).trim().toLowerCase(); }).filter(Boolean);
@@ -101,6 +101,47 @@
         return { auth: m[1], fs: m[2], a: m[1].getAuth(app), db: m[2].getFirestore(app) };
       });
     return st.fb;
+  }
+
+  /* ---------- 이미지 올리기 (Firebase Storage) ----------
+     파일 이름에 시간이 붙어 매번 새 이름이므로, 브라우저가 1년 동안 다시 받지 않도록 캐시를 지정합니다.
+     Storage를 연결하지 않았으면 안내 문구를 보여 주고, GitHub의 images 폴더 경로를 직접 입력해도 됩니다. */
+  function storageApi() {
+    if (!FBC.storageBucket) return Promise.reject(new Error('NO_BUCKET'));
+    if (!st.sg) {
+      st.sg = Promise.all([fb(), import(BASE + 'firebase-storage.js')]).then(function (m) {
+        return { s: m[1], sg: m[1].getStorage(m[0].a.app) };
+      });
+    }
+    return st.sg;
+  }
+  function upload(file) {
+    if (file.size > 10 * 1024 * 1024) return Promise.reject(new Error('파일이 10MB보다 큽니다.'));
+    return storageApi().then(function (c) {
+      var r = c.s.ref(c.sg, 'oc/' + Date.now() + '-' + file.name.replace(/[^\w.\-]/g, '_'));
+      return c.s.uploadBytes(r, file, { contentType: file.type, cacheControl: 'public, max-age=31536000, immutable' })
+        .then(function () { return c.s.getDownloadURL(r); });
+    });
+  }
+  function uploadError(e) {
+    var code = (e && e.code) || '', msg = (e && e.message) || '';
+    if (msg === 'NO_BUCKET') return 'Storage가 연결되지 않았습니다. 설치 화면의 안내대로 연결하거나, GitHub의 images 폴더에 올린 뒤 경로를 입력하세요.';
+    if (code === 'storage/unauthorized' || code === 'storage/unauthenticated') return '업로드 권한이 없습니다. Storage 규칙에 관리자 이메일이 들어 있는지 확인하세요.';
+    if (/bucket-not-found|retry-limit|unknown|invalid-default-bucket/.test(code)) return 'Storage에 연결하지 못했습니다. Firebase 콘솔에서 Storage를 시작했는지 확인하세요.';
+    return '업로드하지 못했습니다. ' + msg;
+  }
+  function uploadBtn(accept, inp, apply) {
+    var file = h('input', { type: 'file', accept: accept, hidden: 'hidden' });
+    var b = h('button', { class: 'oca-btn', type: 'button', text: '올리기' });
+    b.onclick = function () { file.click(); };
+    file.onchange = function () {
+      var f = file.files[0]; if (!f) return;
+      b.textContent = '올리는 중'; b.disabled = true;
+      upload(f).then(function (url) { apply(url); toast('올렸습니다. 저장을 눌러 주세요.'); })
+        .catch(function (e) { toast(uploadError(e), true, 8000); })
+        .then(function () { b.textContent = '올리기'; b.disabled = false; file.value = ''; });
+    };
+    return [b, file];
   }
 
   /* ==========================================================
@@ -296,6 +337,13 @@
       line.appendChild(prev);
     }
     line.appendChild(inp);
+    var isTrack = pkey === 'tracks' && key === 'src';
+    if (!long && (isImg || isTrack)) {
+      uploadBtn(isTrack ? 'audio/*' : 'image/*', inp, function (url) {
+        inp.value = url; set(url); touch();
+        if (prev) { prev.src = url; prev.style.visibility = 'visible'; }
+      }).forEach(function (n) { line.appendChild(n); });
+    }
     if (!long && colorKey(key, val)) {
       col = h('input', { type: 'color', 'aria-label': '색 선택' }); col.value = /^#[0-9a-f]{6}$/i.test(val) ? val : '#ffffff';
       col.oninput = function () { inp.value = col.value; set(col.value); touch(); };
@@ -514,6 +562,11 @@
       "    match /" + P + "reviews/{doc} { allow read: if true; allow write: if isOcAdmin(); }\n" +
       "    match /" + P + "site/{doc}    { allow read: if true; allow write: if isOcAdmin(); }\n\n  }\n}\n";
   }
+  function storageRulesText(list) {
+    var arr = '[' + list.map(function (e) { return "'" + e + "'"; }).join(', ') + ']';
+    return "rules_version = '2';\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /oc/{allPaths=**} {\n      allow read: if true;\n" +
+      "      allow write: if request.auth != null\n        && request.auth.token.email in " + arr + "\n        && request.resource.size < 10 * 1024 * 1024;\n    }\n  }\n}\n";
+  }
   function configText(cfg, list) {
     var keys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'];
     var lines = keys.map(function (k) { return '  ' + k + ': ' + JSON.stringify(cfg[k] || '') + ','; }).join('\n');
@@ -529,7 +582,7 @@
     var status = h('p', { class: 'oca-note' });
     var em = h('input', { class: 'oca-in', type: 'text', placeholder: 'name@gmail.com' }); em.value = emails().join(', ');
     var dl = h('button', { class: 'oca-btn is-main', type: 'button', text: 'firebase-config.js 다운로드', disabled: 'disabled' });
-    var pre = h('pre', { class: 'oca-pre' }), cur = { cfg: {}, list: [] };
+    var pre = h('pre', { class: 'oca-pre' }), spre = h('pre', { class: 'oca-pre' }), cur = { cfg: {}, list: [] };
     function refresh() {
       var cfg = parseCfg(ta.value); if (!ta.value.trim() && FBC.apiKey) cfg = FBC;
       var ok = !!(cfg.apiKey && cfg.projectId && cfg.appId);
@@ -539,17 +592,22 @@
       status.className = 'oca-note' + (ok ? ' oca-ok' : '');
       dl.disabled = !(ok && okMail); cur.cfg = cfg; cur.list = list;
       pre.textContent = rulesText(okMail ? list : ['name@gmail.com']);
+      spre.textContent = storageRulesText(okMail ? list : ['name@gmail.com']);
     }
     ta.oninput = refresh; em.oninput = refresh;
     dl.onclick = function () {
       var a = h('a', { href: URL.createObjectURL(new Blob([configText(cur.cfg, cur.list)], { type: 'text/javascript' })), download: 'firebase-config.js' });
       document.body.appendChild(a); a.click(); a.remove();
     };
-    var cp = h('button', { class: 'oca-btn', type: 'button', text: '규칙 복사' });
-    cp.onclick = function () {
-      var t = pre.textContent, done = function () { toast('복사했습니다.'); };
-      if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () { prompt('복사하세요', t); }); else prompt('복사하세요', t);
-    };
+    function copier(label, source) {
+      var b = h('button', { class: 'oca-btn', type: 'button', text: label });
+      b.onclick = function () {
+        var t = source.textContent, done = function () { toast('복사했습니다.'); };
+        if (navigator.clipboard) navigator.clipboard.writeText(t).then(done, function () { prompt('복사하세요', t); }); else prompt('복사하세요', t);
+      };
+      return b;
+    }
+    var cp = copier('규칙 복사', pre), scp = copier('Storage 규칙 복사', spre);
     function step(n, title, kids) { return h('section', { class: 'oca-step' }, [h('h3', { text: n + '. ' + title })].concat(kids)); }
     wrap.appendChild(step(1, 'Firebase 설정 코드', [
       h('p', { class: 'oca-note', text: 'Firebase 콘솔의 프로젝트 설정, 일반, 내 앱, 웹 앱에서 firebaseConfig를 복사해 붙여넣습니다.' }), ta, status]));
@@ -560,10 +618,14 @@
     wrap.appendChild(step(4, '보안 규칙', [
       h('p', { class: 'oca-note', text: '왼쪽 메뉴의 Firestore Database(Realtime Database 아님) → 규칙 탭에 붙여넣고 게시합니다.' }), cp,
       h('details', { class: 'oca-box', style: 'margin-top:8px' }, [h('summary', { text: '규칙 내용' }), pre])]));
-    wrap.appendChild(step(5, 'Firebase 콘솔 설정', [h('ul', { class: 'oca-ul' }, [
+    wrap.appendChild(step(5, '이미지 업로드 (Storage)', [
+      h('p', { class: 'oca-note', text: 'Storage를 시작한 뒤 규칙 탭에 붙여넣고 게시하면 편집기의 올리기 버튼을 쓸 수 있습니다. 연결하지 않으면 GitHub의 images 폴더에 올린 뒤 경로를 입력합니다.' }), scp,
+      h('details', { class: 'oca-box', style: 'margin-top:8px' }, [h('summary', { text: 'Storage 규칙 내용' }), spre])]));
+    wrap.appendChild(step(6, 'Firebase 콘솔 설정', [h('ul', { class: 'oca-ul' }, [
       h('li', { text: 'Authentication에서 Google 로그인을 사용 설정합니다.' }),
       h('li', { text: 'Authentication의 승인된 도메인에 사이트 주소를 추가합니다.' }),
-      h('li', { text: 'Firestore Database를 생성합니다(프로덕션 모드).' })])]));
+      h('li', { text: 'Firestore Database를 생성합니다(프로덕션 모드).' }),
+      h('li', { text: 'Storage를 시작합니다. 새 프로젝트는 요금제 전환이 필요할 수 있습니다.' })])]));
     wrap.appendChild(h('div', { style: 'padding-top:16px;border-top:0.5px solid var(--gray-6)' }, [h('a', { class: 'oca-btn is-main', href: '#admin', text: '편집기 열기' })]));
     refresh(); return wrap;
   }
