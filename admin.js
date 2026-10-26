@@ -119,6 +119,7 @@
       '@media(prefers-color-scheme:dark){#oca{--gray-1:#111111;--gray-2:#191919;--gray-3:#222222;--gray-4:#2a2a2a;--gray-5:#313131;--gray-6:#3a3a3a;--gray-7:#484848;--gray-8:#606060;--gray-9:#6e6e6e;--gray-10:#7b7b7b;--gray-11:#b4b4b4;--gray-12:#eeeeee;' +
       '--blue-3:#0d2847;--blue-4:#003362;--blue-5:#004074;--blue-8:#2870bd;--blue-9:#0090ff;--blue-10:#3b9eff;--blue-11:#70b8ff;' +
       '--red-3:#3b1219;--red-4:#500f1c;--red-7:#8c333a;--red-9:#e5484d;--red-11:#ff9592;--green-11:#3dd68c}}' +
+      '.cp-backdrop{z-index:100002!important}' +
       '#oca{position:fixed;inset:0;z-index:100000;background:var(--gray-2);color:var(--gray-12);font:400 14px/1.5 "Pretendard","Malgun Gothic",system-ui,sans-serif;overflow:auto}' +
       '#oca *{box-sizing:border-box}#oca[hidden]{display:none}#oca{accent-color:var(--blue-9)}' +
       ':where(#oca) :is(button,input,select,textarea){font:inherit}' +
@@ -160,14 +161,14 @@
       '.oca-menu[hidden]{display:none}.oca-mi{display:flex;align-items:center;height:32px;padding:0 8px;border:0;border-radius:4px;background:transparent;color:var(--gray-12);font:inherit;text-align:left;cursor:pointer}' +
       '.oca-mi:hover{background:var(--gray-3)}' +
       /* 미리보기 */
-      '.oca-split{display:flex;height:calc(100vh - 48px)}.oca-ed{flex:1 1 46%;min-width:400px;overflow:auto}' +
+      '.oca-split{display:flex;height:calc(100vh - 48px)}.oca-ed{flex:1 1 46%;min-width:460px;overflow:auto}' +
       '.oca-pv{flex:1 1 54%;min-width:0;display:flex;flex-direction:column;border-right:0.5px solid var(--gray-6);background:var(--gray-3)}' +
       '.oca-pvbar{display:flex;align-items:center;gap:8px;height:44px;padding:0 12px;background:var(--gray-1);border-bottom:0.5px solid var(--gray-6)}.oca-pvbar b{font-weight:600}' +
       '.oca-pvbody{flex:1;position:relative;overflow:hidden}' +
       '.oca-pvbody iframe{position:absolute;left:0;top:0;border:0;background:var(--gray-1);transform-origin:0 0;outline:0.5px solid var(--gray-7)}' +
-      '.oca-split .oca-main{grid-template-columns:minmax(0,1fr);gap:12px}' +
-      '.oca-split .oca-nav{position:sticky;top:0;z-index:3;flex-direction:row;flex-wrap:wrap;gap:2px;padding:4px;margin:-4px -4px 0;background:var(--gray-2)}' +
-      '.oca-split .oca-nav button{padding:0 8px}.oca-split .oca-row{grid-template-columns:104px minmax(0,1fr)}' +
+      '.oca-split .oca-main{grid-template-columns:112px minmax(0,1fr);gap:12px;padding:12px}' +
+      '.oca-split .oca-nav{top:12px;max-height:calc(100vh - 72px);overflow:auto}' +
+      '.oca-split .oca-nav button{padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.oca-split .oca-row{grid-template-columns:96px minmax(0,1fr)}' +
       '@media(max-width:999px){.oca-main{grid-template-columns:minmax(0,1fr)}.oca-nav{position:static;flex-direction:row;flex-wrap:wrap}.oca-row{grid-template-columns:minmax(0,1fr);gap:0}}' +
       /* 알림 */
       '.oca-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:90vw;padding:8px 12px;border-radius:4px;background:var(--gray-12);color:var(--gray-1);opacity:0;pointer-events:none;transition:opacity 250ms ease-out;z-index:100001}' +
@@ -298,6 +299,7 @@
     if (!long && colorKey(key, val)) {
       col = h('input', { type: 'color', 'aria-label': '색 선택' }); col.value = /^#[0-9a-f]{6}$/i.test(val) ? val : '#ffffff';
       col.oninput = function () { inp.value = col.value; set(col.value); touch(); };
+      withPicker(function () { window.ColorPicker.attach(col); });
       line.appendChild(col);
     }
     return line;
@@ -556,12 +558,12 @@
     wrap.appendChild(step(3, '설정 파일', [
       h('p', { class: 'oca-note', text: '다운로드한 파일로 사이트의 firebase-config.js를 교체한 뒤 다시 업로드합니다.' }), dl]));
     wrap.appendChild(step(4, '보안 규칙', [
-      h('p', { class: 'oca-note', text: 'Firestore Database의 규칙 탭에 붙여넣고 게시합니다.' }), cp,
+      h('p', { class: 'oca-note', text: '왼쪽 메뉴의 Firestore Database(Realtime Database 아님) → 규칙 탭에 붙여넣고 게시합니다.' }), cp,
       h('details', { class: 'oca-box', style: 'margin-top:8px' }, [h('summary', { text: '규칙 내용' }), pre])]));
     wrap.appendChild(step(5, 'Firebase 콘솔 설정', [h('ul', { class: 'oca-ul' }, [
       h('li', { text: 'Authentication에서 Google 로그인을 사용 설정합니다.' }),
       h('li', { text: 'Authentication의 승인된 도메인에 사이트 주소를 추가합니다.' }),
-      h('li', { text: 'Firestore Database를 생성합니다.' })])]));
+      h('li', { text: 'Firestore Database를 생성합니다(프로덕션 모드).' })])]));
     wrap.appendChild(h('div', { style: 'padding-top:16px;border-top:0.5px solid var(--gray-6)' }, [h('a', { class: 'oca-btn is-main', href: '#admin', text: '편집기 열기' })]));
     refresh(); return wrap;
   }
@@ -619,6 +621,17 @@
     root.appendChild(h('div', { id: 'oca-toast', class: 'oca-toast' }));
   }
 
+  /* 스포이드가 있는 공용 색상 선택기 (color-picker.js) */
+  var pickerQ = [], pickerState = 0;
+  function withPicker(fn) {
+    if (window.ColorPicker) return fn();
+    pickerQ.push(fn);
+    if (pickerState) return;
+    pickerState = 1;
+    var s = document.createElement('script'); s.src = 'color-picker.js?v=1';
+    s.onload = function () { pickerQ.splice(0).forEach(function (f) { f(); }); };
+    document.head.appendChild(s);
+  }
   function mount(view) {
     injectCss(); st.view = view || 'admin';
     if (!st.root) {
